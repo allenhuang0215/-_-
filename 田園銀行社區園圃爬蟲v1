@@ -1,0 +1,112 @@
+from urllib.request import urlopen
+from bs4 import BeautifulSoup
+import xlwings as xw
+
+def scarppage(page) :
+    html = urlopen("https://farmcity.taipei/city/m2_field/field_s1_C.php?sid="+str(page))
+    bs = BeautifulSoup(html.read(),"html.parser")
+
+    name = bs.find("h1" ,{'class':"pull-left content_tit pull-left"}).get_text().strip() #農園名稱
+    if  name=="" :
+        #print("這個頁面沒有資料")
+        return ;
+    #print("農園名稱：",name)
+
+#=============================================================
+#面積、期間、位置
+#=============================================================
+    basicdata = bs.find("" ,{'class':"col-md-9 info"}).find_all('p')   
+    area = basicdata[0].get_text()[5:].strip()
+    period_start = basicdata[1].get_text()[5:].strip()[:10]
+    period_end   = basicdata[1].get_text()[5:].strip()[20:].strip()[:10]
+    address =  basicdata[2].get_text()[5:].strip() 
+    #print("耕作面積：",area)
+    #print("認養開始：",period_start)  #可能會沒有
+    #print("認養結束：",period_end)    #可能會沒有
+    #print("基地位置：",address)
+
+    #print("======detaildata========",detaildata)
+
+#=============================================================    
+#管理、所屬、認養單位、耕作方式，這4個因為會在標題右邊 
+#基地介紹、聯絡方式、備註             ，這3個因為會在標題下一列，抓取方式不同
+#最後更新
+#=============================================================
+    detaildata =  bs.find_all("div" ,{'class':"news_s1_t"})  
+    manage_org=None
+    owner_org=None
+    planter_org=None
+    plant_method=None
+    introduce=None
+    contact =None
+    note=None
+    #print("=len(detaildata=",len(detaildata))
+    for i in range(len(detaildata)) :
+        #print("+++++++現在要處理++++++++",detaildata[i].get_text())
+        if detaildata[i].get_text()[:4] == "管理機關" :
+            manage_org =  detaildata[i].get_text().strip()[5:].strip()
+            #print("=管理機關=",manage_org)
+        elif detaildata[i].get_text()[:4] == "所屬單位" :
+            owner_org =  detaildata[i].get_text().strip()[5:].strip()
+            #print("=所屬單位=",owner_org)
+        elif detaildata[i].get_text()[:4] == "認養單位" :
+            planter_org =  detaildata[i].get_text().strip()[5:].strip()
+            #print("=認養單位=",planter_org)   
+        elif detaildata[i].get_text()[:4] == "耕作方式" :
+            plant_method =  detaildata[i].get_text().strip()[5:].strip()
+            #print("=耕作方式=",plant_method)   
+        elif detaildata[i].get_text()[:4] == "基地介紹" :
+            introduce =  detaildata[i].find_next_siblings("" ,{'style':"padding-top:1em"})[0].get_text().strip()
+            #print("=基地介紹=",introduce)   
+        elif detaildata[i].get_text()[:4] == "連絡方式" :
+            contact =  detaildata[i].find_next_siblings("" ,{'style':"padding-top:1em"})[0].get_text().strip()
+            #print("=聯絡方式=",contact)   
+        elif detaildata[i].get_text()[:2] == "備註" :
+            note =  detaildata[i].find_next_siblings("" ,{'style':"padding-top:1em"})[0].get_text().strip()
+            #print("=備註=",note)               
+            
+    last_update = bs.find("" ,{'class':"grey datadate"}).get_text().strip()[9:] #最後更新
+    #print("=最後更新=",last_update)
+
+#=============================================================            
+#儲存
+#=============================================================    
+    sheet.range(f"A{page}:F{page}").value=page,name,area,period_start,period_end,address
+    sheet.range(f"G{page}:N{page}").value=manage_org,owner_org,planter_org,plant_method,contact,last_update,introduce,note
+    
+wb = xw.Book(r"臺北市田園城市基地爬蟲.xlsx")
+sheet = wb.sheets["工作表1"]
+sheet.range("A1:N1").value="頁面ID","農園名稱","耕作面積","認養開始","認養結束","基地位置","管理機關","所屬單位","認養單位","耕作方式","聯絡方式","最後更新","基地介紹","備註"
+
+#scarppage(20)
+
+for  page in range(1000) :
+    scarppage(page)
+
+#====================
+#農園名稱name
+#耕作面積：area
+#認養開始：period_start
+#認養結束：period_end
+#基地位置：address
+
+#管理機關：manage_org
+#所屬單位：owner_org
+#認養單位：planter_org
+#耕作方式：plant_method
+
+#基地介紹：introduce
+#聯絡方式：contact
+#最後更新：last_update
+#======================    
+
+#如果資料是齊全的，中間會有6+1(現況照片)個屬性
+#第0個，一定是現況照片
+#第1個，一定是管理機關
+
+
+#20 有備註
+#32 沒有日期、聯絡方式
+#33 沒有所屬單位、基地介紹、聯絡方式
+#37 沒有所屬單位、聯絡方式
+#38 沒有聯絡方式
